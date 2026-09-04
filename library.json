@@ -6,6 +6,7 @@
   "license": "GPL-2.0-or-later",
   "frameworks": "arduino",
   "platforms": "espressif32",
+  "repository": { "type": "git", "url": "https://github.com/cuneytozseker/esp32-spwm-hub75.git" },
   "headers": "spwm_hub75.h",
   "build": { "srcDir": "src" }
 }
