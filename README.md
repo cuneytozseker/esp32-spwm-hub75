@@ -62,7 +62,7 @@ Everything is prefixed `spwm_`. Colours are `0x00RRGGBB`; build them with
 | `spwm_begin()` | `bool` | Allocates, configures the peripheral, starts the transfer. Always check it. |
 | `spwm_show()` | | Pushes the framebuffer. The only call that touches the panel. |
 | `spwm_end()` | | Releases the framebuffer. |
-| `spwm_set_brightness(pct)` | | 0..100 percent of full drive. Takes effect on the next `spwm_show()`. |
+| `spwm_set_brightness(pct)` | | 0..100 percent of full drive. Takes effect on the next `spwm_show()`. Scaled in 32-bit, so low percentages keep their tonal range. |
 | `spwm_get_brightness()` | `uint8_t` | |
 
 ### Drawing
@@ -243,6 +243,28 @@ and a null framebuffer is a fast route to a crash loop.
 **A correct picture is not evidence the firmware is healthy.** Under DMA the
 image persists with no CPU involvement, so a wedged application still looks
 perfect. `spwm_is_running()` reports the GDMA channel state.
+
+## Brightness and tonal range
+
+`spwm_set_brightness()` scales into the panel's full 16-bit greyscale word in
+32-bit arithmetic, so a low brightness setting does not cost you levels:
+
+| Framebuffer value | 16-bit word at 12% |
+|---|---|
+| 1 | 30 |
+| 8 | 246 |
+| 128 | 3947 |
+| 255 | 7864 |
+
+All 256 input levels stay distinct. An earlier version scaled in 8 bits before
+shifting to 16, which at 12% mapped 255 to 30 and **everything below 9 to zero**
+— 31 usable levels, visible banding on smooth gradients, and a dark end with no
+detail at all. If you are porting this idea elsewhere, do the brightness
+multiply at the output width, not the input width.
+
+The panel's register `0x07` sets a low-end drive threshold, so there is still a
+floor below which very faint pixels may not light reliably. Where it sits in
+16-bit terms has not been measured.
 
 ## Panel profile
 

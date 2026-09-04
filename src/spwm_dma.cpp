@@ -457,15 +457,25 @@ void spwm_dma_write_frame(const uint32_t *framebuffer) {
                 const int x = chip * SPWM_CHANNELS_PER_CHIP + ch;
                 const uint32_t t = top[x], b2 = bot[x];
 
-                // MSB-aligned into the 16-bit greyscale word, matching
-                // spwm_repack_pixel_block_gpio_bits: value in bits 15..5 with
-                // the tail clear, i.e. v << 8 for an 8-bit source.
-                const uint16_t tr = (uint16_t)((((t >> 16) & 0xFF) * spwm_brightness / 100) << 8);
-                const uint16_t tg = (uint16_t)((((t >>  8) & 0xFF) * spwm_brightness / 100) << 8);
-                const uint16_t tb = (uint16_t)(((( t      ) & 0xFF) * spwm_brightness / 100) << 8);
-                const uint16_t br = (uint16_t)((((b2 >> 16) & 0xFF) * spwm_brightness / 100) << 8);
-                const uint16_t bg = (uint16_t)((((b2 >>  8) & 0xFF) * spwm_brightness / 100) << 8);
-                const uint16_t bb = (uint16_t)(((( b2     ) & 0xFF) * spwm_brightness / 100) << 8);
+                // Scale into the FULL 16-bit greyscale word in 32-bit
+                // arithmetic. 257 = 65535/255, so 255 maps to 65535 before
+                // brightness is applied.
+                //
+                // This used to be (v * brightness / 100) << 8, which did the
+                // brightness scale in 8 bits FIRST: at brightness 12 that made
+                // 255 -> 30 and anything below 9 -> 0, leaving ~31 usable
+                // levels on a driver that accepts 16 bits per channel. Visible
+                // as banding on smooth gradients, and it is why dithering
+                // seemed necessary. Doing it in 32 bits keeps ~8x more levels
+                // and costs one multiply.
+                #define SPWM_LEVEL(v)                     ((uint16_t)(((uint32_t)(v) * 257u * spwm_brightness) / 100u))
+
+                const uint16_t tr = SPWM_LEVEL((t  >> 16) & 0xFF);
+                const uint16_t tg = SPWM_LEVEL((t  >>  8) & 0xFF);
+                const uint16_t tb = SPWM_LEVEL( t         & 0xFF);
+                const uint16_t br = SPWM_LEVEL((b2 >> 16) & 0xFF);
+                const uint16_t bg = SPWM_LEVEL((b2 >>  8) & 0xFF);
+                const uint16_t bb = SPWM_LEVEL( b2        & 0xFF);
 
                 for (int bit = SPWM_WORD_BITS - 1; bit >= 0; bit--) {
                     const uint16_t m = (uint16_t)(1u << bit);
