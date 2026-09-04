@@ -1,6 +1,6 @@
 {
   "name": "esp32-spwm-hub75",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ESP32-S3 driver for S-PWM HUB75 LED panels (ICND1065L and similar). These panels take one 16-bit greyscale word per pixel per colour and do their own PWM, so binary-code-modulation libraries cannot drive them. Uses LCD_CAM + GDMA, so the entire waveform is in the DMA stream and no CPU stall can disturb the scan.",
   "keywords": "hub75, led-matrix, esp32-s3, spwm, icnd1065l, lcd_cam, gdma, dma",
   "license": "GPL-2.0-or-later",
