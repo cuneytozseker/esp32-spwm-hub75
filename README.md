@@ -27,7 +27,10 @@ they do not occur here.
 
 ## Architecture
 
-Component and sequence diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+![module view](docs/uml.png)
+
+Sequence and data-flow diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Regenerate the image with `python tools/uml_diagram.py`.
 
 ## Quick start
 
