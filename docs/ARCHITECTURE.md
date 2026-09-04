@@ -1,0 +1,168 @@
+# Architecture
+
+Diagrams render on GitHub and in most Markdown viewers.
+
+The library is C, not object-oriented, so these are UML *component* and
+*sequence* views rather than class hierarchies — modules with their public
+operations, and the call flow between them.
+
+## Modules
+
+```mermaid
+classDiagram
+    class spwm_hub75_h {
+        <<public API>>
+        +spwm_begin() bool
+        +spwm_show()
+        +spwm_end()
+        +spwm_set_brightness(pct)
+        +spwm_framebuffer() color*
+        +spwm_clock_hz() u32
+        +spwm_multiplex_hz() u32
+        +spwm_is_running() bool
+    }
+    class spwm_graphics {
+        <<primitives>>
+        +spwm_clear()
+        +spwm_fill(c)
+        +spwm_set_pixel(x,y,c)
+        +spwm_draw_line(...)
+        +spwm_draw_rect(...)
+        +spwm_fill_rect(...)
+        +spwm_draw_circle(...)
+        +spwm_fill_circle(...)
+    }
+    class spwm_hub75_c {
+        <<lifecycle>>
+        -fb : color*
+        -started : bool
+        +owns the framebuffer
+    }
+    class spwm_dma {
+        <<driver>>
+        -chunks[] : u16*
+        -descriptors[] : dma_descriptor_t
+        -dma_chan : gdma_channel_handle_t
+        +spwm_dma_init(hz) bool
+        +spwm_dma_write_frame(fb)
+        +spwm_dma_rotate_register()
+        +spwm_dma_running() bool
+    }
+    class spwm_config {
+        <<compile-time>>
+        geometry, pins
+        timing, brightness
+        SPWM_ROW_SLOT_OFFSET
+    }
+    class spwm_profile {
+        <<panel data>>
+        SPWM_REG_R/G/B[22]
+        SPWM_REG_FIXED[5]
+    }
+    class LCD_CAM_GDMA {
+        <<ESP32-S3 peripheral>>
+        endless descriptor ring
+    }
+
+    spwm_hub75_h <|.. spwm_hub75_c : implements
+    spwm_hub75_h <|.. spwm_graphics : implements
+    spwm_graphics ..> spwm_hub75_c : spwm_framebuffer()
+    spwm_hub75_c --> spwm_dma : init / write / rotate
+    spwm_dma ..> spwm_config : geometry, timing
+    spwm_dma ..> spwm_profile : register payloads
+    spwm_dma --> LCD_CAM_GDMA : builds + starts
+```
+
+`spwm_config.h` and `spwm_profile.h` are compile-time inputs, not runtime
+objects: the DMA frame layout — buffer size, descriptor count, every
+control-bit position — is computed from them.
+
+## Startup
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant API as spwm_hub75.c
+    participant DMA as spwm_dma.c
+    participant HW as LCD_CAM + GDMA
+
+    App->>API: spwm_begin()
+    API->>API: alloc framebuffer (PSRAM, else internal)
+    API->>DMA: spwm_dma_init(SPWM_CLOCK_HZ)
+    DMA->>DMA: alloc frame in 2 KB chunks
+    Note over DMA: NOT one contiguous block —<br/>that fails once WiFi is up
+    DMA->>DMA: build_control_bits()<br/>row, OE, LAT — once
+    DMA->>DMA: build_register_data()
+    DMA->>DMA: descriptor ring, last → first
+    DMA->>HW: configure clock, i8080 16-bit, GPIO matrix
+    DMA->>HW: gdma_start + lcd_start
+    HW-->>HW: streams forever, no CPU
+    DMA-->>API: true
+    API->>DMA: spwm_dma_write_frame(fb)
+    API-->>App: true
+
+    Note over App,HW: Nothing may pinMode() the panel pins after this —<br/>it disconnects them from the peripheral, silently
+```
+
+## Per frame
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant API as spwm_hub75.c
+    participant DMA as spwm_dma.c
+    participant HW as GDMA ring
+
+    App->>API: draw calls (framebuffer only)
+    App->>API: spwm_show()
+    API->>DMA: spwm_dma_rotate_register()
+    Note over DMA: slot 3 is a ROTATING register:<br/>one word per frame, 22-frame cycle.<br/>Must keep ticking or the panel dies.
+    DMA->>DMA: wait until GDMA is outside the init region
+    DMA->>DMA: patch slot-3 data bits
+    API->>DMA: spwm_dma_write_frame(fb)
+    loop 32 scan iterations
+        DMA->>DMA: src = (r + SPWM_ROW_SLOT_OFFSET) % 32
+        DMA->>DMA: patch 6 data bits per word, MSB-first
+    end
+    Note over DMA,HW: control bits are never rewritten —<br/>only the 6 colour bits change
+    HW-->>HW: next pass shows the new frame
+```
+
+## Frame layout
+
+One 16-bit word per clock. Every signal except CLK is a bit in that word, so
+the DMA stream carries the complete waveform.
+
+```mermaid
+flowchart LR
+    subgraph Frame["DMA frame — ~72k words, ~141 KB"]
+        direction LR
+        I["init<br/>704 words<br/>OE burst, 3 LAT<br/>commands, 5 registers"]
+        U["upload<br/>70144 words<br/>32 iterations x 16 groups<br/>x (128 data + 9 spacer)"]
+        P["pad<br/>~1400 words<br/>scan runs on, lit,<br/>to a clean row wrap"]
+        I --> U --> P
+    end
+    P -.->|ring wraps| I
+```
+
+```mermaid
+flowchart TD
+    W["16-bit output word"]
+    W --> D["bits 0-5<br/>R1 G1 B1 R2 G2 B2"]
+    W --> R["bits 6-10<br/>A B C D E — row address"]
+    W --> L["bit 11 — LAT"]
+    W --> O["bit 12 — OE"]
+    D -.-> N1["the only bits the CPU rewrites"]
+    R -.-> N2["free-running scan,<br/>decoupled from which row's<br/>data is being uploaded"]
+```
+
+## Why the CPU cannot disturb the picture
+
+The row address, latch and blanking are *data*, not GPIO writes. Once the
+descriptor ring is running, the scan is generated by the peripheral. A stalled
+task, WiFi activity or a flash cache miss cannot affect it.
+
+The corollary is a trap worth stating: **a correct picture is not evidence the
+firmware is healthy.** The image persists with no CPU involvement at all, so a
+wedged application still looks perfect. `spwm_is_running()` reports the GDMA
+channel state — but even that is true of a board whose application task has died.

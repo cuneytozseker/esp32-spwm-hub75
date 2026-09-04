@@ -25,6 +25,10 @@ scan. The same panel on a Raspberry Pi needed core isolation and realtime
 priority and still showed artefacts; those turned out to be timing jitter, and
 they do not occur here.
 
+## Architecture
+
+Component and sequence diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Quick start
 
 ```cpp
