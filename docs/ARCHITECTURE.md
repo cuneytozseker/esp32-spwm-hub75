@@ -3,7 +3,7 @@
 Diagrams render on GitHub and in most Markdown viewers.
 
 The library is C, not object-oriented, so these are UML *component* and
-*sequence* views rather than class hierarchies — modules with their public
+*sequence* views rather than class hierarchies -- modules with their public
 operations, and the call flow between them.
 
 ## Modules
@@ -74,8 +74,8 @@ classDiagram
 ```
 
 `spwm_config.h` and `spwm_profile.h` are compile-time inputs, not runtime
-objects: the DMA frame layout — buffer size, descriptor count, every
-control-bit position — is computed from them.
+objects: the DMA frame layout -- buffer size, descriptor count, every
+control-bit position -- is computed from them.
 
 ## Startup
 
@@ -90,8 +90,8 @@ sequenceDiagram
     API->>API: alloc framebuffer (PSRAM, else internal)
     API->>DMA: spwm_dma_init(SPWM_CLOCK_HZ)
     DMA->>DMA: alloc frame in 2 KB chunks
-    Note over DMA: NOT one contiguous block —<br/>that fails once WiFi is up
-    DMA->>DMA: build_control_bits()<br/>row, OE, LAT — once
+    Note over DMA: NOT one contiguous block --<br/>that fails once WiFi is up
+    DMA->>DMA: build_control_bits()<br/>row, OE, LAT -- once
     DMA->>DMA: build_register_data()
     DMA->>DMA: descriptor ring, last → first
     DMA->>HW: configure clock, i8080 16-bit, GPIO matrix
@@ -101,7 +101,7 @@ sequenceDiagram
     API->>DMA: spwm_dma_write_frame(fb)
     API-->>App: true
 
-    Note over App,HW: Nothing may pinMode() the panel pins after this —<br/>it disconnects them from the peripheral, silently
+    Note over App,HW: Nothing may pinMode() the panel pins after this --<br/>it disconnects them from the peripheral, silently
 ```
 
 ## Per frame
@@ -124,7 +124,7 @@ sequenceDiagram
         DMA->>DMA: src = (r + SPWM_ROW_SLOT_OFFSET) % 32
         DMA->>DMA: patch 6 data bits per word, MSB-first
     end
-    Note over DMA,HW: control bits are never rewritten —<br/>only the 6 colour bits change
+    Note over DMA,HW: control bits are never rewritten --<br/>only the 6 colour bits change
     HW-->>HW: next pass shows the new frame
 ```
 
@@ -135,7 +135,7 @@ the DMA stream carries the complete waveform.
 
 ```mermaid
 flowchart LR
-    subgraph Frame["DMA frame — ~72k words, ~141 KB"]
+    subgraph Frame["DMA frame -- ~72k words, ~141 KB"]
         direction LR
         I["init<br/>704 words<br/>OE burst, 3 LAT<br/>commands, 5 registers"]
         U["upload<br/>70144 words<br/>32 iterations x 16 groups<br/>x (128 data + 9 spacer)"]
@@ -149,9 +149,9 @@ flowchart LR
 flowchart TD
     W["16-bit output word"]
     W --> D["bits 0-5<br/>R1 G1 B1 R2 G2 B2"]
-    W --> R["bits 6-10<br/>A B C D E — row address"]
-    W --> L["bit 11 — LAT"]
-    W --> O["bit 12 — OE"]
+    W --> R["bits 6-10<br/>A B C D E -- row address"]
+    W --> L["bit 11 -- LAT"]
+    W --> O["bit 12 -- OE"]
     D -.-> N1["the only bits the CPU rewrites"]
     R -.-> N2["free-running scan,<br/>decoupled from which row's<br/>data is being uploaded"]
 ```
@@ -165,4 +165,4 @@ task, WiFi activity or a flash cache miss cannot affect it.
 The corollary is a trap worth stating: **a correct picture is not evidence the
 firmware is healthy.** The image persists with no CPU involvement at all, so a
 wedged application still looks perfect. `spwm_is_running()` reports the GDMA
-channel state — but even that is true of a board whose application task has died.
+channel state -- but even that is true of a board whose application task has died.
