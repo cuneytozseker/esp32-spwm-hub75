@@ -20,18 +20,62 @@
 #define W SPWM_PANEL_WIDTH
 #define H SPWM_PANEL_HEIGHT
 
-static inline bool inside(int x, int y) {
-    return x >= 0 && y >= 0 && x < W && y < H;
+static int  rotation = 0;                // 0, 90, 180, 270
+static bool mirror_x = false;
+static bool mirror_y = false;
+
+void spwm_set_rotation(int degrees) {
+    degrees %= 360;
+    if (degrees < 0) degrees += 360;
+    rotation = (degrees / 90) * 90;
+}
+int spwm_get_rotation(void) { return rotation; }
+
+void spwm_set_mirror(bool x, bool y) { mirror_x = x; mirror_y = y; }
+
+
+int spwm_width(void)  { return (rotation == 90 || rotation == 270) ? H : W; }
+int spwm_height(void) { return (rotation == 90 || rotation == 270) ? W : H; }
+
+// Logical coordinates -> panel buffer index, or -1 if off panel.
+//
+// Note the asymmetry between 90 and 270: a rotation maps the logical x axis to
+// one screen direction and y to the PERPENDICULAR one with a consistent
+// handedness. Inverting only one of the two produces a MIRROR rather than a
+// rotation, which looks almost right and is easy to ship by accident.
+static inline int index_of(int x, int y) {
+    // Mirror in LOGICAL space, before rotating. Rotation alone cannot express
+    // every mounting: this panel needs a reflection as well, because its column
+    // order runs opposite to the assumed direction. A reflection is invisible
+    // in symmetric content and shows up only as mirrored text, so it is worth
+    // being able to state explicitly rather than folding into a bespoke
+    // transform in each app.
+    if (mirror_x) x = spwm_width()  - 1 - x;
+    if (mirror_y) y = spwm_height() - 1 - y;
+
+    int px, py;
+    switch (rotation) {
+        case 90:  px = W - 1 - y; py = x;         break;
+        case 180: px = W - 1 - x; py = H - 1 - y; break;
+        case 270: px = y;         py = H - 1 - x; break;
+        default:  px = x;         py = y;         break;
+    }
+    if (px < 0 || py < 0 || px >= W || py >= H) return -1;
+    return py * W + px;
 }
 
 void spwm_set_pixel(int x, int y, spwm_color_t c) {
     spwm_color_t *fb = spwm_framebuffer();
-    if (fb && inside(x, y)) fb[y * W + x] = c;
+    if (!fb) return;
+    const int i = index_of(x, y);
+    if (i >= 0) fb[i] = c;
 }
 
 spwm_color_t spwm_get_pixel(int x, int y) {
     spwm_color_t *fb = spwm_framebuffer();
-    return (fb && inside(x, y)) ? fb[y * W + x] : 0;
+    if (!fb) return 0;
+    const int i = index_of(x, y);
+    return i >= 0 ? fb[i] : 0;
 }
 
 void spwm_clear(void) {
@@ -40,6 +84,7 @@ void spwm_clear(void) {
 }
 
 void spwm_fill(spwm_color_t c) {
+    // Rotation-independent: every pixel is covered either way.
     spwm_color_t *fb = spwm_framebuffer();
     if (!fb) return;
     for (int i = 0; i < W * H; i++) fb[i] = c;
@@ -80,14 +125,14 @@ void spwm_draw_rect(int x, int y, int w, int h, spwm_color_t c) {
 
 void spwm_fill_rect(int x, int y, int w, int h, spwm_color_t c) {
     if (w <= 0 || h <= 0) return;
-    // Clip once rather than per pixel; a full-screen fill is 8192 calls.
+    // Clip once rather than per pixel, then go through set_pixel so rotation
+    // applies. Writing the buffer directly here silently ignored rotation.
+    const int lw = spwm_width(), lh = spwm_height();
     int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
-    int x1 = x + w > W ? W : x + w, y1 = y + h > H ? H : y + h;
-    spwm_color_t *fb = spwm_framebuffer();
-    if (!fb) return;
+    int x1 = x + w > lw ? lw : x + w, y1 = y + h > lh ? lh : y + h;
     for (int yy = y0; yy < y1; yy++)
         for (int xx = x0; xx < x1; xx++)
-            fb[yy * W + xx] = c;
+            spwm_set_pixel(xx, yy, c);
 }
 
 // Midpoint circle.

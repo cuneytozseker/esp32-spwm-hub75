@@ -115,6 +115,34 @@ spwm_set_font(NULL);                 // back to the built-in
 GFX font, which is each format's own convention. Mixing them up puts text one
 font height out of place.
 
+### Orientation
+
+| Call | Notes |
+|---|---|
+| `spwm_set_rotation(deg)` | 0, 90, 180 or 270, clockwise as the viewer sees it. |
+| `spwm_set_mirror(x, y)` | Mirror the logical axes, applied before rotation. |
+
+Rotation applies to every drawing call including text, and `spwm_width()` /
+`spwm_height()` swap under 90 and 270, so use those rather than
+`SPWM_PANEL_WIDTH`/`HEIGHT` in drawing code.
+
+**Rotation alone cannot describe every mounting.** If a panel's column order
+runs opposite to the assumed direction the result is a *reflection*, and no
+rotation is a reflection. The symptom is mirrored text on otherwise perfect
+output, which is invisible in gradients, ramps and other symmetric content, so
+it survives casual testing. Determine it with an asymmetric mark: draw a letter
+`F` and a block at the origin, and see where they land.
+
+The panel this was developed on, stood on its end, needs:
+
+```cpp
+spwm_set_rotation(90);
+spwm_set_mirror(true, false);
+```
+
+`spwm_framebuffer()` is **not** rotated. It is the raw panel buffer by
+definition.
+
 ### Framebuffer and geometry
 
 | Call | Returns | Notes |
@@ -202,6 +230,12 @@ LCD_CAM through the GPIO matrix, and a later `pinMode()` on any of them
 disconnects the peripheral. The failure is deceptive: the DMA keeps streaming
 and every diagnostic reports healthy while the panel is dark. Converting from a
 bit-banged driver means deleting its pin setup, not just its refresh loop.
+
+**A static image stays lit.** The panel's slot-3 register rotates through 22
+words and has to keep cycling or the panel loses its configuration. The driver
+maintains that on its own timer, so drawing once and never calling `spwm_show()`
+again is fine. This was not always true, and the failure gave no clue: the DMA
+reported healthy while the panel went dark.
 
 **Always check `spwm_begin()`.** A failed init leaves nothing driving the panel,
 and a null framebuffer is a fast route to a crash loop.

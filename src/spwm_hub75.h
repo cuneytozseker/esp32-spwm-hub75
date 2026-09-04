@@ -82,6 +82,10 @@ void spwm_end(void);
 
 // Push the framebuffer to the panel. Returns immediately; the DMA does the
 // rest. Call once per frame.
+//
+// Safe to call rarely, or never again: a static image stays lit. The panel's
+// rotating register is maintained by a timer inside the driver, not by this
+// call, so nothing depends on how often the application redraws.
 void spwm_show(void);
 
 // Global brightness, 0..100 percent of full drive. Takes effect on the next
@@ -96,8 +100,36 @@ uint8_t spwm_get_brightness(void);
 // Valid only after a successful spwm_begin().
 spwm_color_t *spwm_framebuffer(void);
 
-static inline int spwm_width(void)  { return SPWM_PANEL_WIDTH; }
-static inline int spwm_height(void) { return SPWM_PANEL_HEIGHT; }
+// Logical size, which SWAPS under 90/270 rotation. Use these rather than
+// SPWM_PANEL_WIDTH/HEIGHT in drawing code, or a rotated app will lay itself
+// out for the wrong shape.
+int spwm_width(void);
+int spwm_height(void);
+
+// ---------------------------------------------------------------- rotation
+//
+// Rotates the coordinate system used by every drawing call, including text.
+// 0, 90, 180 or 270 degrees, applied clockwise as seen by the viewer.
+//
+// A panel stood on its end shows a 128x64 hardware panel as 64 wide by 128
+// tall. Without this, every app has to transform its own coordinates and the
+// built-in font cannot be rotated at all -- and getting the transform subtly
+// wrong mirrors the image, which is easy to do and hard to see in symmetric
+// content.
+//
+// Costs one branch and an index computation per pixel. spwm_framebuffer()
+// is NOT rotated: it is the raw panel buffer, by definition.
+void spwm_set_rotation(int degrees);
+int  spwm_get_rotation(void);
+
+// Mirror the logical axes, applied BEFORE rotation.
+//
+// Rotation alone cannot describe every mounting: if a panel's column order runs
+// opposite to the assumed direction, the result is a reflection, and no
+// rotation is a reflection. The symptom is mirrored text on otherwise correct
+// output -- invisible in symmetric content, which is why it survives casual
+// testing. Determine it with an asymmetric mark (a letter F works).
+void spwm_set_mirror(bool x, bool y);
 
 // ------------------------------------------------------------- primitives
 //

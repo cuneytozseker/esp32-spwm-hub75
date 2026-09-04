@@ -8,11 +8,21 @@
 #include <Arduino.h>
 #include <string.h>
 #include <esp_heap_caps.h>
+#include <esp_timer.h>
 
 #define SPWM_PIXELS (SPWM_PANEL_WIDTH * SPWM_PANEL_HEIGHT)
 
 static spwm_color_t *fb;
 static bool started;
+static esp_timer_handle_t keepalive;
+
+// The panel's slot-3 register ROTATES: one word per frame, cycling through the
+// profile, and it has to keep cycling or the panel loses its configuration and
+// goes dark. That used to ride on spwm_show(), which meant an application
+// displaying a STATIC image -- draw once in setup(), never call show() again --
+// went dark for no visible reason. Making the panel's liveness depend on how
+// often the app happens to redraw is a trap, so the driver now maintains it.
+static void keepalive_cb(void *) { spwm_dma_rotate_register(); }
 
 spwm_color_t *spwm_framebuffer(void) { return fb; }
 
@@ -39,11 +49,29 @@ bool spwm_begin(void) {
     }
 
     spwm_dma_write_frame(fb);
+
+    // ~11 ms is one DMA frame period at the default clock, so the 22-word
+    // profile completes in about 250 ms and refreshes forever after.
+    const esp_timer_create_args_t args = {
+        .callback = keepalive_cb,
+        .arg = 0,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "spwm_keepalive",
+        .skip_unhandled_events = true,
+    };
+    if (esp_timer_create(&args, &keepalive) == ESP_OK)
+        esp_timer_start_periodic(keepalive, 11000);
+
     started = true;
     return true;
 }
 
 void spwm_end(void) {
+    if (keepalive) {
+        esp_timer_stop(keepalive);
+        esp_timer_delete(keepalive);
+        keepalive = 0;
+    }
     // The DMA ring is deliberately endless; stopping it cleanly needs teardown
     // the driver does not implement yet, so this only drops the framebuffer.
     started = false;
@@ -51,12 +79,8 @@ void spwm_end(void) {
 
 void spwm_show(void) {
     if (!started) return;
-
-    // Advance the rotating register slot. The init block runs at the start of
-    // every frame and slot 3 is a ROTATING register -- one word per frame,
-    // cycling through the profile. Send all of them once and almost nothing is
-    // configured; this must keep ticking for the panel to stay alive.
-    spwm_dma_rotate_register();
+    // Just the pixels. The register rotation runs on its own timer, so a
+    // static image stays lit whether or not this is ever called again.
     spwm_dma_write_frame(fb);
 }
 
