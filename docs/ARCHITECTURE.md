@@ -32,6 +32,20 @@ classDiagram
         +spwm_draw_circle(...)
         +spwm_fill_circle(...)
     }
+    class spwm_text {
+        <<text>>
+        -gfx_font : spwm_gfx_font_t*
+        +spwm_draw_text(x,y,s,c)
+        +spwm_draw_char(x,y,ch,c)
+        +spwm_text_width(s)
+        +spwm_font_height()
+        +spwm_set_font(f)
+    }
+    class spwm_font {
+        <<generated>>
+        SPWM_FONT[95][8]
+        6x8, DejaVu Sans Mono
+    }
     class spwm_hub75_c {
         <<lifecycle>>
         -fb : color*
@@ -70,6 +84,8 @@ classDiagram
     spwm_hub75_c --> spwm_dma : init / write / rotate
     spwm_dma ..> spwm_config : geometry, timing
     spwm_dma ..> spwm_profile : register payloads
+    spwm_text ..> spwm_graphics : set_pixel()
+    spwm_text ..> spwm_font : built-in glyphs
     spwm_dma --> LCD_CAM_GDMA : builds + starts
 ```
 

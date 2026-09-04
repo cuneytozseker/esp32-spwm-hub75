@@ -84,6 +84,37 @@ panel until `spwm_show()`.
 | `spwm_draw_circle(cx, cy, r, c)` | Midpoint circle. |
 | `spwm_fill_circle(cx, cy, r, c)` | Span filled, so no seams. |
 
+### Text
+
+| Call | Notes |
+|---|---|
+| `spwm_draw_text(x, y, str, c)` | Returns width drawn. `
+` starts a new line. |
+| `spwm_draw_char(x, y, ch, c)` | Returns the advance. |
+| `spwm_text_width(str)` | Width in pixels, without drawing. |
+| `spwm_font_height()` | Line height of the current font. |
+| `spwm_set_font(f)` | Adafruit GFX font, or `NULL` for the built-in. |
+
+A 6x8 font is built in: 21 characters across a 128 px panel, 8 lines down a
+64 px one, 760 bytes of flash. It is generated from DejaVu Sans Mono by
+`tools/make_font.py`, so the data is reproducible rather than an unexplained
+wall of hex.
+
+For larger type, point `spwm_set_font()` at any Adafruit GFX font. The structs
+are layout-compatible with `GFXfont`/`GFXglyph`, so the hundreds of existing
+`Fonts/*.h` headers work by casting, with **no dependency on Adafruit_GFX**:
+
+```cpp
+#include <Fonts/FreeSans9pt7b.h>
+spwm_set_font((const spwm_gfx_font_t *) &FreeSans9pt7b);
+spwm_draw_text(2, 20, "Hello", spwm_rgb(255, 255, 255));
+spwm_set_font(NULL);                 // back to the built-in
+```
+
+`y` is the **top of the cell** for the built-in font and the **baseline** for a
+GFX font, which is each format's own convention. Mixing them up puts text one
+font height out of place.
+
 ### Framebuffer and geometry
 
 | Call | Returns | Notes |

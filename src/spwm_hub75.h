@@ -120,6 +120,46 @@ void spwm_fill_rect(int x, int y, int w, int h, spwm_color_t c);
 void spwm_draw_circle(int cx, int cy, int r, spwm_color_t c);
 void spwm_fill_circle(int cx, int cy, int r, spwm_color_t c);
 
+// ------------------------------------------------------------------- text
+//
+// A 6x8 bitmap font is built in: 21 characters across a 128 px panel, 8 lines
+// down a 64 px one, 760 bytes of flash. Generated from DejaVu Sans Mono by
+// tools/make_font.py.
+//
+// For anything larger, point spwm_set_font() at an Adafruit GFX font. These
+// structs are layout-compatible with Adafruit's GFXfont/GFXglyph, so the
+// hundreds of existing `Fonts/*.h` headers work by casting -- WITHOUT
+// depending on the Adafruit_GFX library, which is a C++ class hierarchy this
+// C API has no use for:
+//
+//     #include <Fonts/FreeSans9pt7b.h>
+//     spwm_set_font((const spwm_gfx_font_t *) &FreeSans9pt7b);
+
+typedef struct {
+    uint16_t bitmapOffset;
+    uint8_t  width, height, xAdvance;
+    int8_t   xOffset, yOffset;
+} spwm_gfx_glyph_t;
+
+typedef struct {
+    uint8_t          *bitmap;
+    spwm_gfx_glyph_t *glyph;
+    uint16_t          first, last;
+    uint8_t           yAdvance;
+} spwm_gfx_font_t;
+
+// NULL restores the built-in font.
+void spwm_set_font(const spwm_gfx_font_t *f);
+const spwm_gfx_font_t *spwm_get_font(void);
+
+// NOTE ON y: it is the TOP of the cell for the built-in font, and the BASELINE
+// for a GFX font -- each format's own convention. Mixing them up puts text one
+// font height out of place, which is the usual first surprise on switching.
+int spwm_draw_char(int x, int y, char ch, spwm_color_t fg);   // returns advance
+int spwm_draw_text(int x, int y, const char *s, spwm_color_t fg);  // returns width
+int spwm_text_width(const char *s);
+int spwm_font_height(void);
+
 // ------------------------------------------------------------ diagnostics
 
 // Achieved pixel clock and multiplex rate. Only 160 MHz / integer N is

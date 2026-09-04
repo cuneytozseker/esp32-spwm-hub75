@@ -156,6 +156,19 @@ gfx = Box("spwm_graphics", 70, 760, stereotype="<<primitives>>",
                "+spwm_draw_circle(...)",
                "+spwm_fill_circle(...)"])
 
+txt = Box("spwm_text", 70, 1180, stereotype="<<text>>",
+          attrs=["-gfx_font: gfx_font_t*"],
+          ops=["+spwm_draw_text(x,y,s,c)",
+               "+spwm_draw_char(x,y,ch,c)",
+               "+spwm_text_width(s)",
+               "+spwm_font_height()",
+               "+spwm_set_font(f)"])
+
+fnt = Box("spwm_font", 700, 1180, stereotype="<<generated>>",
+          attrs=["+SPWM_FONT[95][8]",
+                 "  6x8, DejaVu Sans Mono",
+                 "  760 bytes"])
+
 dma = Box("spwm_dma", 700, 520, stereotype="<<driver>>",
           attrs=["-chunks[70]: uint16*",
                  "-descriptors: dma_desc*",
@@ -190,7 +203,7 @@ hw = Box("LCD_CAM + GDMA", 1310, 900, stereotype="<<ESP32-S3 peripheral>>",
          ops=["+streams forever,",
               " no CPU involved"])
 
-boxes = [api, gfx, dma, cfg, prof, hw]
+boxes = [api, gfx, txt, fnt, dma, cfg, prof, hw]
 
 W = 1900
 H = max(b.y + b.h for b in boxes) + 90
@@ -215,6 +228,17 @@ polyline(d, [(ax, ay), (bx, ay), (bx, by + 14)])
 OVERLAY.append((open_arrow, ((bx, by), (0, -1))))
 label(d, (ax + 12, ay - 26), "uses")
 label(d, (bx + 14, by + 22), "framebuffer()")
+
+# text -> api (draws via set_pixel), text -> font data
+ax, ay = txt.right(0.35)
+bx, by = fnt.left(0.35)
+polyline(d, [(ax, ay), (bx, by)])
+OVERLAY.append((open_arrow, ((bx, by), (-1, 0))))
+
+ax, ay = txt.top(0.25)
+bx, by = gfx.bottom(0.25)
+polyline(d, [(ax, ay), (bx, by)])
+OVERLAY.append((open_arrow, ((bx, by), (0, -1))))
 
 # api -> dma
 ax, ay = api.right(0.72)
