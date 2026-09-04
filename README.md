@@ -115,6 +115,12 @@ The framebuffer goes to PSRAM when available, falling back to internal. Check
 `heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)` before adding tasks:
 largest-block matters more than free total.
 
+**Nothing may touch the panel pins after `spwm_begin()`.** It routes them to
+LCD_CAM through the GPIO matrix, and a later `pinMode()` on any of them
+disconnects the peripheral. The failure is deceptive: the DMA keeps streaming
+and every diagnostic reports healthy while the panel is dark. Converting from a
+bit-banged driver means deleting its pin setup, not just its refresh loop.
+
 **Always check `spwm_begin()`.** A failed init leaves nothing driving the panel,
 and a null framebuffer is a fast route to a crash loop.
 

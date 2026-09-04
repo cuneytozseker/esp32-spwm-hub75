@@ -68,6 +68,13 @@ static inline spwm_color_t spwm_rgb(uint8_t r, uint8_t g, uint8_t b) {
 // Returns false if memory could not be allocated -- always check it: a failed
 // init leaves nothing driving the panel, and writing through the resulting null
 // framebuffer is a fast route to a crash loop.
+//
+// NOTHING MAY TOUCH THE PANEL PINS AFTERWARDS. This routes them to LCD_CAM
+// through the GPIO matrix; a later pinMode() on any of them disconnects the
+// peripheral from that pin. The failure is deceptive -- the DMA keeps streaming
+// and every diagnostic reports healthy while the panel sits dark. If you are
+// converting from a bit-banged driver, delete its pin setup rather than letting
+// it run first.
 bool spwm_begin(void);
 
 // Stop the transfer and release everything.
